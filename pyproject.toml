@@ -1,0 +1,40 @@
+[tool.poetry]
+name = "news-agent"
+version = "0.1.0"
+description = ""
+authors = ["ccw7463 <changwoo7463@gmail.com>"]
+readme = "README.md"
+
+# 포함할 패키지 지정
+packages = [
+    { include = "log" },
+    { include = "src" },
+    { include = "modules", from = "src" }
+]
+
+
+[tool.poetry.dependencies]
+python = "^3.11"
+mcp = "^1.11.0"
+feedparser = "^6.0.11"
+requests = "^2.32.4"
+aiohttp = "^3.12.14"
+fastmcp = "^2.10.5"
+langchain = "^0.3.26"
+langchain-mcp-adapters = "^0.1.9"
+langgraph = "^0.5.2"
+langchain-openai = "^0.3.27"
+rich = "^14.0.0"
+langchain-community = "^0.3.27"
+html2text = "^2025.4.15"
+tqdm = "^4.67.1"
+beautifulsoup4 = "^4.12.2"
+pytz = "^2025.2"
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+
+[tool.poetry.scripts]
+
+[build-system]
+requires = ["poetry-core"]
