@@ -27,7 +27,7 @@ logger_manager = LoggerManager()
 logger = logger_manager.setup_logger(
     name="news_scraper", 
     log_file=f"./log/{time_now_str}_news_scraper.log",
-    console_output=True
+    console_output=False
 )
 
 class NewsAgentState(MessagesState):
@@ -132,7 +132,7 @@ async def main():
     logger.info("-" * 50)
     logger.info("🔍 QUESTION : 최신 AI 뉴스 6가지 정도 알려주세요.")
     
-    question = "최신 AI 뉴스 6가지 정도 알려주세요."
+    question = "최신 AI 뉴스 16가지 정도 알려주세요."
     logger.info("Running LangGraph workflow...")
     
     try:

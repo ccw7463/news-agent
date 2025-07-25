@@ -61,6 +61,7 @@ async def search_news(
             - article_url: URL of the article
             - article_image_url: URL of the main article image
             - article_published: Publication date
+            - article_agency: News agency/source name
             - article_content: Extracted content of the article
             - user_query: Original search query
     """
@@ -109,6 +110,7 @@ async def search_specific_topic_news(
             - article_url: URL of the article
             - article_image_url: URL of the main article image
             - article_published: Publication date
+            - article_agency: News agency/source name
             - article_content: Extracted content of the article
             - topic: Original topic category
     """

@@ -26,10 +26,12 @@ class RSSItem:
         title (str): The title of the RSS item
         link (str): The URL link to the RSS item
         published (Optional[datetime]): The publication date of the RSS item
+        agency (Optional[str]): The news agency/source name
     """
     title: str
     link: str
     published: Optional[datetime] = None
+    agency: Optional[str] = None
 
 @dataclass
 class RSSFeed:
@@ -126,8 +128,10 @@ class GoogleRSSTools:
             List[Dict[str, Any]]: List of article information dictionaries containing:
                 - article_title: Title of the article
                 - article_url: URL of the article
-                - article_content: Extracted content of the article
+                - article_image_url: URL of the main article image
                 - article_published: Publication date
+                - article_agency: News agency/source name
+                - article_content: Extracted content of the article
                 - user_query: Original search query
         """
         # Get all RSS items and process until we have enough successful results
@@ -186,6 +190,7 @@ class GoogleRSSTools:
                 - article_url: URL of the article
                 - article_image_url: URL of the main article image
                 - article_published: Publication date
+                - article_agency: News agency/source name
                 - article_content: Extracted content of the article
                 - topic: Original topic category
         Raises:
@@ -302,6 +307,14 @@ class GoogleRSSTools:
             # Parse with feedparser
             parsed = feedparser.parse(content)
             
+            # 디버깅을 위한 상세 로그
+            logger.info(f"Parsed RSS feed keys: {list(parsed.keys())}")
+            logger.info(f"Feed info: {parsed.feed}")
+            logger.info(f"Entries count: {len(parsed.entries) if hasattr(parsed, 'entries') else 'No entries'}")
+            logger.info(f"Bozo: {parsed.bozo}")  # 파싱 오류 여부
+            if parsed.bozo:
+                logger.error(f"Feed parsing errors: {parsed.bozo_exception}")
+            
             # Extract feed metadata
             feed_info = parsed.feed
             feed = RSSFeed(
@@ -313,10 +326,23 @@ class GoogleRSSTools:
             
             # Parse items
             for entry in parsed.entries:
+                title = self._clean_text(entry.get('title', ''))
+                
+                # 제목에서 뉴스기사명 추출 (제목 - 뉴스기사명 형태)
+                agency = ""
+                if " - " in title:
+                    parts = title.split(" - ", 1)
+                    if len(parts) == 2:
+                        title = parts[0].strip()
+                        agency = parts[1].strip()
+                
+                logger.info(f"title: {title}, agency: {agency}")
+                
                 item = RSSItem(
-                    title=self._clean_text(entry.get('title', '')),
+                    title=title,
                     link=entry.get('link', ''),
-                    published=self._parse_date(entry.get('published', ''))
+                    published=self._parse_date(entry.get('published', '')),
+                    agency=agency
                 )
                 feed.items.append(item)
             
@@ -345,6 +371,7 @@ class GoogleRSSTools:
                 - article_url: Actual URL of the article (after redirect resolution)
                 - article_image_url: URL of the main article image
                 - article_published: Publication date
+                - article_agency: News agency/source name
                 - article_content: Extracted content of the article
         """
         # Handle Google News redirect to get actual article URL
@@ -361,6 +388,7 @@ class GoogleRSSTools:
             'article_url': article_url,
             'article_image_url': article_image_url,
             'article_published': rss_item.published,
+            "article_agency": rss_item.agency,
             'article_content': article_data.get('article_content', '')
         }
 

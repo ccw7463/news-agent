@@ -9,6 +9,7 @@ readme = "README.md"
 packages = [
     { include = "log" },
     { include = "src" },
+    { include = "tests" },
     { include = "modules", from = "src" }
 ]
 
