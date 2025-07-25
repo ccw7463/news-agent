@@ -39,7 +39,7 @@ async def get_available_topics() -> List[str]:
 async def search_news(
     query: str, 
     max_results: int = 5,
-    max_length: int = 4000,
+    max_length: int = 5000,
     timeout: int = 10
 ) -> List[Dict[str, Any]]:
     """
@@ -47,7 +47,7 @@ async def search_news(
     
     This method performs RSS search and content extraction in a single call,
     returning comprehensive article information including title, URL, content,
-    and publication date.
+    publication date, and main image URL.
     
     Args:
         query: Search query for news articles
@@ -59,8 +59,9 @@ async def search_news(
         List of article information dictionaries containing:
             - article_title: Title of the article
             - article_url: URL of the article
-            - article_content: Extracted content of the article
+            - article_image_url: URL of the main article image
             - article_published: Publication date
+            - article_content: Extracted content of the article
             - user_query: Original search query
     """
     
@@ -79,7 +80,7 @@ async def search_news(
 async def search_specific_topic_news(
     topic: str = "top", 
     max_results: int = 5,
-    max_length: int = 4000,
+    max_length: int = 5000,
     timeout: int = 10
 ) -> List[Dict[str, Any]]:
     """
@@ -106,8 +107,9 @@ async def search_specific_topic_news(
         List of article information dictionaries containing:
             - article_title: Title of the article
             - article_url: URL of the article
-            - article_content: Extracted content of the article
+            - article_image_url: URL of the main article image
             - article_published: Publication date
+            - article_content: Extracted content of the article
             - topic: Original topic category
     """
     

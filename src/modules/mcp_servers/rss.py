@@ -69,7 +69,7 @@ class GoogleRSSTools:
         timeout (int): Timeout in seconds for HTTP requests (default: 30)
     """
     
-    def __init__(self, language: str = "en", region: str = "US", timeout: int = 10):
+    def __init__(self, language: str = "ko", region: str = "KR", timeout: int = 10):
         """
         Initialize GoogleRSSTools with language and region settings.
         
@@ -109,7 +109,7 @@ class GoogleRSSTools:
         if self.session:
             await self.session.close()
     
-    async def search_news(self, query: str, max_results: int = 5, max_length: int = 4000) -> List[Dict[str, Any]]:
+    async def search_news(self, query: str, max_results: int = 5, max_length: int = 5000) -> List[Dict[str, Any]]:
         """
         Search for news articles and extract their content in one operation.
         
@@ -120,7 +120,7 @@ class GoogleRSSTools:
         Args:
             query (str): Search query for news articles
             max_results (int): Maximum number of results to return (default: 5)
-            max_length (int): Maximum length of article content in characters (default: 4000)
+            max_length (int): Maximum length of article content in characters (default: 5000)
             
         Returns:
             List[Dict[str, Any]]: List of article information dictionaries containing:
@@ -143,7 +143,7 @@ class GoogleRSSTools:
                 
             try:
                 article_data = await asyncio.wait_for(
-                    self._get_actual_url_and_content(rss_item=item, max_length=max_length),
+                    self._get_actual_url_content_and_image(rss_item=item, max_length=max_length),
                     timeout=self.timeout
                 )
                 article_data['user_query'] = query
@@ -160,7 +160,7 @@ class GoogleRSSTools:
         # logger.info(f"[Tool : search_news] ✅ Successfully processed {len(results)} out of {processed_count} attempted articles")
         return results
         
-    async def search_specific_topic_news(self, topic: str, max_results: int = 5, max_length: int = 4000) -> List[Dict[str, Any]]:
+    async def search_specific_topic_news(self, topic: str, max_results: int = 5, max_length: int = 5000) -> List[Dict[str, Any]]:
         """
         Search for news articles from specific topics and extract their content.
         
@@ -178,16 +178,16 @@ class GoogleRSSTools:
                 - "science": Science news
                 - "health": Health news
             max_results (int): Maximum number of results to return (default: 5)
-            max_length (int): Maximum length of article content in characters (default: 4000)
+            max_length (int): Maximum length of article content in characters (default: 5000)
             
         Returns:
             List[Dict[str, Any]]: List of article information dictionaries containing:
                 - article_title: Title of the article
                 - article_url: URL of the article
-                - article_content: Extracted content of the article
+                - article_image_url: URL of the main article image
                 - article_published: Publication date
+                - article_content: Extracted content of the article
                 - topic: Original topic category
-                
         Raises:
             ValueError: If the specified topic is not supported
         """
@@ -203,7 +203,7 @@ class GoogleRSSTools:
                 break
             try:
                 article_data = await asyncio.wait_for(
-                    self._get_actual_url_and_content(rss_item=item, max_length=max_length),
+                    self._get_actual_url_content_and_image(rss_item=item, max_length=max_length),
                     timeout=self.timeout
                 )
                 article_data['topic'] = topic
@@ -328,7 +328,7 @@ class GoogleRSSTools:
             raise
 
 
-    async def _get_actual_url_and_content(self, rss_item: RSSItem, max_length: int = 4000) -> Dict[str, Any]:
+    async def _get_actual_url_content_and_image(self, rss_item: RSSItem, max_length: int = 5000) -> Dict[str, Any]:
         """
         Extract actual article content from an RSS item.
         
@@ -343,8 +343,9 @@ class GoogleRSSTools:
             Dict[str, Any]: Dictionary containing article information:
                 - article_title: Title of the article
                 - article_url: Actual URL of the article (after redirect resolution)
-                - article_content: Extracted content of the article
+                - article_image_url: URL of the main article image
                 - article_published: Publication date
+                - article_content: Extracted content of the article
         """
         # Handle Google News redirect to get actual article URL
         article_url = await self._extract_actual_url(rss_item.link)
@@ -352,11 +353,15 @@ class GoogleRSSTools:
         # Extract actual article content
         article_data = await self._extract_actual_article_content(article_url, max_length)
         
+        # Extract image from the actual article URL
+        article_image_url = await self._extract_image_from_html(article_url)
+        
         return {
             'article_title': rss_item.title,
             'article_url': article_url,
-            'article_content': article_data.get('article_content', ''),
-            'article_published': rss_item.published
+            'article_image_url': article_image_url,
+            'article_published': rss_item.published,
+            'article_content': article_data.get('article_content', '')
         }
 
     async def _extract_actual_url(self, google_news_url: str) -> str:
@@ -424,7 +429,7 @@ class GoogleRSSTools:
             logger.error(f"Failed to resolve Google News redirect: {str(e)}")
             return google_news_url
     
-    async def _extract_actual_article_content(self, url: str, max_length: int = 4000) -> Dict[str, Any]:
+    async def _extract_actual_article_content(self, url: str, max_length: int = 5000) -> Dict[str, Any]:
         """
         Extract article content from the actual article URL.
         
@@ -469,6 +474,195 @@ class GoogleRSSTools:
         except Exception as e:
             logger.error(f"Failed to extract article content from {url}: {str(e)}")
             return {'article_content': ''}
+
+    async def _extract_image_from_html(self, url: str) -> str:
+        """
+        Extract the main image URL from an article's HTML page.
+        
+        This method looks for images in the following order:
+        1. Open Graph og:image meta tag
+        2. Twitter Card twitter:image meta tag
+        3. Schema.org image markup
+        4. First large image in the article body
+        
+        Args:
+            url (str): URL of the article to extract image from
+            
+        Returns:
+            str: URL of the main article image, or empty string if not found
+        """
+        try:
+            if not self.session:
+                response = requests.get(url, headers=self.headers, timeout=self.timeout)
+                html_content = response.text
+            else:
+                async with self.session.get(url) as response:
+                    if response.status != 200:
+                        return ""
+                    html_content = await response.text()
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # 1. Try Open Graph og:image
+            og_image = soup.find('meta', property='og:image')
+            if og_image and og_image.get('content'):
+                return og_image['content']
+            
+            # 2. Try Twitter Card twitter:image
+            twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
+            if twitter_image and twitter_image.get('content'):
+                return twitter_image['content']
+            
+            # 3. Try Schema.org image
+            schema_image = soup.find('meta', attrs={'itemprop': 'image'})
+            if schema_image and schema_image.get('content'):
+                return schema_image['content']
+            
+            # 4. Look for JSON-LD structured data
+            json_ld_scripts = soup.find_all('script', type='application/ld+json')
+            for script in json_ld_scripts:
+                try:
+                    data = json.loads(script.string)
+                    if isinstance(data, dict):
+                        # Check for image in various schema formats
+                        image_url = self._extract_image_from_json_ld(data)
+                        if image_url:
+                            return image_url
+                except (json.JSONDecodeError, AttributeError):
+                    continue
+            
+            # 5. Find the first large image in the article body
+            # Look for images in common article containers
+            article_selectors = [
+                'article', '.article', '.post', '.entry', '.content',
+                '[role="main"]', '.main-content', '.story-body'
+            ]
+            
+            for selector in article_selectors:
+                article_container = soup.select_one(selector)
+                if article_container:
+                    # Find images with reasonable size (likely to be main image)
+                    images = article_container.find_all('img')
+                    for img in images:
+                        src = img.get('src') or img.get('data-src')
+                        if src:
+                            # Check if it's a relative URL and make it absolute
+                            if src.startswith('//'):
+                                src = 'https:' + src
+                            elif src.startswith('/'):
+                                from urllib.parse import urljoin
+                                src = urljoin(url, src)
+                            elif not src.startswith('http'):
+                                from urllib.parse import urljoin
+                                src = urljoin(url, src)
+                            
+                            # Skip small images, icons, and ads
+                            if self._is_valid_article_image(img, src):
+                                return src
+            
+            # 6. Fallback: find any large image on the page
+            all_images = soup.find_all('img')
+            for img in all_images:
+                src = img.get('src') or img.get('data-src')
+                if src and self._is_valid_article_image(img, src):
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    elif src.startswith('/'):
+                        from urllib.parse import urljoin
+                        src = urljoin(url, src)
+                    elif not src.startswith('http'):
+                        from urllib.parse import urljoin
+                        src = urljoin(url, src)
+                    return src
+            
+            return ""
+            
+        except Exception as e:
+            logger.error(f"Failed to extract image from {url}: {str(e)}")
+            return ""
+    
+    def _extract_image_from_json_ld(self, data: Dict[str, Any]) -> Optional[str]:
+        """
+        Extract image URL from JSON-LD structured data.
+        
+        Args:
+            data (Dict[str, Any]): JSON-LD data object
+            
+        Returns:
+            Optional[str]: Image URL if found, None otherwise
+        """
+        # Check for image property
+        if 'image' in data:
+            image_data = data['image']
+            if isinstance(image_data, str):
+                return image_data
+            elif isinstance(image_data, dict) and 'url' in image_data:
+                return image_data['url']
+            elif isinstance(image_data, list) and len(image_data) > 0:
+                first_image = image_data[0]
+                if isinstance(first_image, str):
+                    return first_image
+                elif isinstance(first_image, dict) and 'url' in first_image:
+                    return first_image['url']
+        
+        # Check for mainEntity (common in Article schema)
+        if 'mainEntity' in data:
+            main_entity = data['mainEntity']
+            if isinstance(main_entity, dict):
+                return self._extract_image_from_json_ld(main_entity)
+        
+        # Check for @graph (multiple entities)
+        if '@graph' in data:
+            graph = data['@graph']
+            if isinstance(graph, list):
+                for item in graph:
+                    if isinstance(item, dict):
+                        image_url = self._extract_image_from_json_ld(item)
+                        if image_url:
+                            return image_url
+        
+        return None
+    
+    def _is_valid_article_image(self, img_tag, src: str) -> bool:
+        """
+        Check if an image is likely to be a valid article image.
+        
+        Args:
+            img_tag: BeautifulSoup img tag
+            src (str): Image source URL
+            
+        Returns:
+            bool: True if image is likely to be a valid article image
+        """
+        # Skip small images, icons, and ads
+        width = img_tag.get('width')
+        height = img_tag.get('height')
+        
+        if width and height:
+            try:
+                w, h = int(width), int(height)
+                if w < 200 or h < 200:  # Too small to be main image
+                    return False
+            except ValueError:
+                pass
+        
+        # Skip common ad/icon patterns
+        skip_patterns = [
+            'ad', 'ads', 'banner', 'icon', 'logo', 'avatar', 'thumbnail',
+            'sponsor', 'promo', 'button', 'social', 'share', 'facebook',
+            'twitter', 'instagram', 'youtube', 'play', 'pause', 'close'
+        ]
+        
+        src_lower = src.lower()
+        for pattern in skip_patterns:
+            if pattern in src_lower:
+                return False
+        
+        # Skip data URIs and very short URLs
+        if src.startswith('data:') or len(src) < 10:
+            return False
+        
+        return True
 
     def _parse_date(self, date_str: str) -> Optional[datetime]:
         """
