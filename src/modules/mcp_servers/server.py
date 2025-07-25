@@ -52,7 +52,7 @@ async def search_news(
     Args:
         query: Search query for news articles
         max_results: Maximum number of results to return (default: 5)
-        max_length: Maximum length of article content in characters (default: 4000)
+        max_length: Maximum length of article content in characters (default: 5000)
         timeout: Timeout in seconds for HTTP requests (default: 10)
     
     Returns:
@@ -101,7 +101,7 @@ async def search_specific_topic_news(
             - "science": Science news
             - "health": Health news
         max_results: Maximum number of results to return (default: 5)
-        max_length: Maximum length of article content in characters (default: 4000)
+        max_length: Maximum length of article content in characters (default: 5000)
         timeout: Timeout in seconds for HTTP requests (default: 10)
     
     Returns:

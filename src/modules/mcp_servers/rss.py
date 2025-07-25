@@ -307,13 +307,15 @@ class GoogleRSSTools:
             # Parse with feedparser
             parsed = feedparser.parse(content)
             
-            # 디버깅을 위한 상세 로그
+            """
+            # for debugging
             logger.info(f"Parsed RSS feed keys: {list(parsed.keys())}")
             logger.info(f"Feed info: {parsed.feed}")
             logger.info(f"Entries count: {len(parsed.entries) if hasattr(parsed, 'entries') else 'No entries'}")
-            logger.info(f"Bozo: {parsed.bozo}")  # 파싱 오류 여부
+            logger.info(f"Bozo: {parsed.bozo}")
             if parsed.bozo:
                 logger.error(f"Feed parsing errors: {parsed.bozo_exception}")
+            """
             
             # Extract feed metadata
             feed_info = parsed.feed
@@ -328,15 +330,13 @@ class GoogleRSSTools:
             for entry in parsed.entries:
                 title = self._clean_text(entry.get('title', ''))
                 
-                # 제목에서 뉴스기사명 추출 (제목 - 뉴스기사명 형태)
+                # extract news agency from title (title - news agency)
                 agency = ""
                 if " - " in title:
                     parts = title.split(" - ", 1)
                     if len(parts) == 2:
                         title = parts[0].strip()
                         agency = parts[1].strip()
-                
-                logger.info(f"title: {title}, agency: {agency}")
                 
                 item = RSSItem(
                     title=title,
