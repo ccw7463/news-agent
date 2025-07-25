@@ -74,8 +74,8 @@ class GoogleRSSTools:
         Initialize GoogleRSSTools with language and region settings.
         
         Args:
-            language (str): Language code for RSS feeds (default: "en")
-            region (str): Region code for RSS feeds (default: "US")
+            language (str): Language code for RSS feeds
+            region (str): Region code for RSS feeds
             timeout (int): Timeout in seconds for HTTP requests (default: 10)
         """
         self.session = None
