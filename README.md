@@ -103,3 +103,8 @@ Run the application using Poetry:
 ```bash
 poetry run python main.py
 ```
+
+Test Result
+<img width="1637" height="1174" alt="스크린샷 2025-07-25 오전 10 30 34" src="https://github.com/user-attachments/assets/f21cb1e0-41c8-4695-8bc9-47538d4b6a86" />
+
+
