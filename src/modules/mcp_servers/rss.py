@@ -84,6 +84,8 @@ class GoogleRSSTools:
         self.language = language
         self.region = region
         self.timeout = timeout
+        
+        # User-Agent
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
@@ -138,31 +140,95 @@ class GoogleRSSTools:
         rss_items = await self._get_news_list(query)
         # logger.info(f"[Tool : search_news] 💡 Found {len(rss_items)} items for query '{query}'")
         
+        # Create tasks for parallel processing
+        tasks = []
+        for item in rss_items[:max_results * 2]:  # Process up to 2x max_results to account for failures
+            task = asyncio.create_task(
+                self._process_single_article(item, max_length, query)
+            )
+            tasks.append(task)
+        
+        # Execute all tasks in parallel and collect results
         results = []
         processed_count = 0
         
-        for item in rss_items:
-            if len(results) >= max_results:
-                break
-                
+        # Process results as they complete using asyncio.as_completed
+        for completed_task in asyncio.as_completed(tasks):
             try:
-                article_data = await asyncio.wait_for(
-                    self._get_actual_url_content_and_image(rss_item=item, max_length=max_length),
-                    timeout=self.timeout
-                )
-                article_data['user_query'] = query
-                results.append(article_data)
+                article_data = await completed_task
+                if article_data:
+                    results.append(article_data)
+                    if len(results) >= max_results:
+                        # Cancel remaining tasks if we have enough results
+                        for task in tasks:
+                            if not task.done():
+                                task.cancel()
+                        break
             except asyncio.TimeoutError:
-                logger.warning(f"Timeout processing article: {item.title}")
+                logger.warning("Timeout processing article")
                 continue
             except Exception as e:
-                logger.warning(f"Failed to process article '{item.title}': {str(e)}")
+                logger.warning(f"Failed to process article: {str(e)}")
                 continue
             
             processed_count += 1
         
         # logger.info(f"[Tool : search_news] ✅ Successfully processed {len(results)} out of {processed_count} attempted articles")
         return results
+    
+    async def _process_single_article(self, item: RSSItem, max_length: int, query: str) -> Optional[Dict[str, Any]]:
+        """
+        Helper method to process a single article.
+        
+        Args:
+            item (RSSItem): RSS item to process
+            max_length (int): Maximum content length
+            query (str): Original search query
+            
+        Returns:
+            Optional[Dict[str, Any]]: Processed article data or None (if failed)
+        """
+        try:
+            # Extract actual URL content and image with timeout
+            article_data = await asyncio.wait_for(
+                self._get_actual_url_content_and_image(rss_item=item, max_length=max_length),
+                timeout=self.timeout
+            )
+            article_data['user_query'] = query
+            return article_data
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout processing article: {item.title}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to process article '{item.title}': {str(e)}")
+            return None
+    
+    async def _process_single_topic_article(self, item: RSSItem, max_length: int, topic: str) -> Optional[Dict[str, Any]]:
+        """
+        Helper method to process a single topic article.
+        
+        Args:
+            item (RSSItem): RSS item to process
+            max_length (int): Maximum content length
+            topic (str): Original topic category
+            
+        Returns:
+            Optional[Dict[str, Any]]: Processed article data or None (if failed)
+        """
+        try:
+            # Extract actual URL content and image with timeout
+            article_data = await asyncio.wait_for(
+                self._get_actual_url_content_and_image(rss_item=item, max_length=max_length),
+                timeout=self.timeout
+            )
+            article_data['topic'] = topic
+            return article_data
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout processing article: {item.title}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to process article '{item.title}': {str(e)}")
+            return None
         
     async def search_specific_topic_news(self, topic: str, max_results: int = 5, max_length: int = 5000) -> List[Dict[str, Any]]:
         """
@@ -196,28 +262,39 @@ class GoogleRSSTools:
         Raises:
             ValueError: If the specified topic is not supported
         """
-        # Get all RSS items and process until we have enough successful results
+        # Get all RSS items for the given topic and process until we have enough successful results
         rss_items = await self._get_specific_topic_news_list(topic)
         # logger.info(f"[Tool : search_specific_topic_news] 💡 Found {len(rss_items)} items for topic '{topic}'")
         
+        # Create tasks for parallel processing
+        tasks = []
+        for item in rss_items[:max_results * 2]:  # Process up to 2x max_results to account for failures
+            task = asyncio.create_task(
+                self._process_single_topic_article(item, max_length, topic)
+            )
+            tasks.append(task)
+        
+        # Execute all tasks in parallel and collect results
         results = []
         processed_count = 0
         
-        for item in rss_items:
-            if len(results) >= max_results:
-                break
+        # Process results as they complete using asyncio.as_completed
+        for completed_task in asyncio.as_completed(tasks):
             try:
-                article_data = await asyncio.wait_for(
-                    self._get_actual_url_content_and_image(rss_item=item, max_length=max_length),
-                    timeout=self.timeout
-                )
-                article_data['topic'] = topic
-                results.append(article_data)
+                article_data = await completed_task
+                if article_data:
+                    results.append(article_data)
+                    if len(results) >= max_results:
+                        # Cancel remaining tasks if we have enough results
+                        for task in tasks:
+                            if not task.done():
+                                task.cancel()
+                        break
             except asyncio.TimeoutError:
-                logger.warning(f"Timeout processing article: {item.title}")
+                logger.warning("Timeout processing article")
                 continue
             except Exception as e:
-                logger.warning(f"Failed to process article '{item.title}': {str(e)}")
+                logger.warning(f"Failed to process article: {str(e)}")
                 continue
             
             processed_count += 1

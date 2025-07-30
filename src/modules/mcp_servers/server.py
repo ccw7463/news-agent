@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, List
 from fastmcp import FastMCP
-from src.modules.mcp_servers.rss import GoogleRSSTools
+from src.agents.news_agent.rss import GoogleRSSTools
 from fastmcp.server.middleware.timing import TimingMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
