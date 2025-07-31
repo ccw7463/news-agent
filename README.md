@@ -2,7 +2,7 @@
 
 ## Overview
 
-https://github.com/user-attachments/assets/effd531e-7296-4f4c-8e98-7230542b6e41
+https://github.com/user-attachments/assets/834439cb-5198-4a40-a8e1-676ee2dbca21
 
 This project is a simple news agent built using the [google-rss-mcp](https://github.com/ccw7463/google-rss-mcp) server in combination with LangGraph.
 
