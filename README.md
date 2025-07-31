@@ -2,6 +2,8 @@
 
 ## Overview
 
+https://github.com/user-attachments/assets/effd531e-7296-4f4c-8e98-7230542b6e41
+
 This project is a simple news agent built using the [google-rss-mcp](https://github.com/ccw7463/google-rss-mcp) server in combination with LangGraph.
 
 The google-rss-mcp is a custom MCP (Model Context Protocol) server that I developed for fetching and processing Google News RSS feeds. This news-agent project demonstrates how to integrate such a custom MCP server with LangGraph workflows.
@@ -103,9 +105,3 @@ Run the application using Poetry:
 ```bash
 poetry run python main.py
 ```
-
-Test Result:
-
-<img width="1637" height="1174" alt="스크린샷 2025-07-25 오전 10 30 34" src="https://github.com/user-attachments/assets/f21cb1e0-41c8-4695-8bc9-47538d4b6a86" />
-
-
