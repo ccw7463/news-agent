@@ -71,7 +71,7 @@ class GoogleRSSTools:
         timeout (int): Timeout in seconds for HTTP requests (default: 30)
     """
     
-    def __init__(self, language: str = "ko", region: str = "KR", timeout: int = 10):
+    def __init__(self, language: str = "en", region: str = "US", timeout: int = 10):
         """
         Initialize GoogleRSSTools with language and region settings.
         

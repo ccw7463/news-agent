@@ -9,26 +9,26 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.human import HumanMessage
 from langchain_core.messages import SystemMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langgraph.graph import StateGraph, MessagesState, START
+from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain.chat_models import init_chat_model
 from typing import List, Any, Dict
-from src.modules.implementations.logger_manager import LoggerManager
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.align import Align
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.text import Text
 
 load_dotenv()
+
+# Initialize console
+console = Console()
 
 # Initialize time
 kst = pytz.timezone('Asia/Seoul')
 time_now = datetime.now(kst)
 time_now_str = time_now.strftime("%Y%m%d_%H%M%S")
-
-# Initialize LoggerManager
-logger_manager = LoggerManager()
-logger = logger_manager.setup_logger(
-    name="news_scraper", 
-    log_file=f"./log/{time_now_str}_news_scraper.log",
-    console_output=True
-)
 
 class NewsAgentState(MessagesState):
     articles: List[Dict[str, Any]]
@@ -36,16 +36,29 @@ class NewsAgentState(MessagesState):
 async def main():
     
     # Header
-    logger.info("=" * 80)
-    logger.info("🚀 AI News Search with LangGraph & FastMCP")
-    logger.info("Powered by Google RSS and OpenAI GPT-4o-mini")
-    logger.info("=" * 80)
+    console.print(Panel.fit(
+        "[bold blue]🚀 AI News Search with LangGraph & FastMCP[/bold blue]\n"
+        "[dim]Powered by Google RSS and OpenAI GPT-4o-mini[/dim]\n"
+        f"[dim]Started at: {time_now_str}[/dim]",
+        border_style="blue"
+    ))
     
     # Initialize model
+    console.print(Panel(
+        "[bold yellow]🤖 Initializing OpenAI GPT-4o-mini model...[/bold yellow]",
+        border_style="yellow"
+    ))
     model = init_chat_model("openai:gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY", ""))
+    console.print(Panel(
+        "[bold green]✅ Model initialized successfully![/bold green]",
+        border_style="green"
+    ))
     
     # Initialize MCP client
-    logger.info("📡 Connecting to Google RSS FastMCP server...")
+    console.print(Panel(
+        "[bold yellow]📡 Connecting to Google RSS FastMCP server...[/bold yellow]",
+        border_style="yellow"
+    ))
     
     client = MultiServerMCPClient(
         {
@@ -58,22 +71,33 @@ async def main():
     )
     tools = await client.get_tools()
     
-    logger.info("✅ FastMCP server connected successfully!")
+    console.print(Panel(
+        "[bold green]✅ FastMCP server connected successfully![/bold green]",
+        border_style="green"
+    ))
     
     # Display available tools
-    logger.info("🔧 Available Google News RSS FastMCP Tools:")
+    tools_table = Table(title="🔧 Available Google News RSS FastMCP Tools", 
+                        show_header=True, header_style="bold white")
+    tools_table.add_column("Tool Name", style="cyan", no_wrap=True)
+    tools_table.add_column("Description", style="white")
+    
     for tool in tools:
-        logger.info(f"   • {tool.name}: {tool.description}")
+        tools_table.add_row(tool.name, tool.description)
+    
+    console.print(tools_table)
     
     # Build LangGraph
-    logger.info("🔨 Building LangGraph workflow...")
+    console.print(Panel(
+        "[bold yellow]🔨 Building LangGraph workflow...[/bold yellow]",
+        border_style="yellow"
+    ))
     
     def call_model(state: NewsAgentState):
         response = model.bind_tools(tools).invoke(state["messages"])
         return {"messages": response}
 
-    def summary_node(state: NewsAgentState):
-        
+    async def summary_node(state: NewsAgentState):
         # Extract article data from ToolMessage
         articles = []
         for msg in state.get("messages", []):
@@ -83,7 +107,7 @@ async def main():
                     if isinstance(data, list):
                         articles.extend(data)
                 except Exception as e:
-                    logger.error(f"❌ ToolMessage JSON decode error: {e}")
+                    console.print(f"[red]ToolMessage JSON decode error: {e}[/red]")
 
         # Extract user's question
         user_query = None
@@ -94,10 +118,14 @@ async def main():
         if not user_query:
             user_query = "No user question provided. Please summarize the article content in 5 sentences or less based on the article title."
 
-        # Generate summary
-        logger.info(f"Generating AI summaries for {len(articles)} articles...")
-        summary_success_count = 0
-        for idx, article in enumerate(articles):
+        # Generate summary with progress
+        console.print(Panel(
+            f"[bold yellow]🤖 Generating AI summaries for {len(articles)} articles...[/bold yellow]",
+            border_style="yellow"
+        ))
+        
+        # Create tasks for parallel processing
+        async def process_single_summary(article, idx):
             content = article.get("article_content", "")
             title = article.get("article_title", "")
             prompt = [
@@ -105,15 +133,32 @@ async def main():
                 HumanMessage(content=f"Question: {user_query}\nArticle Title: {title}\nArticle Content: {content}\nSummary:")
             ]
             try:
-                summary = model.invoke(prompt).content.strip()
-                article["summary"] = summary
-                logger.info(f"   - Article {idx+1}: {title[:60]}...")
-                summary_success_count += 1
+                summary = await model.ainvoke(prompt)
+                article["summary"] = summary.content.strip()
+                console.print(f"[green]   ✓ Article {idx+1}: {title[:60]}...[/green]")
+                return True
             except Exception as e:
-                logger.error(f"❌ Summary generation failed for article {idx+1}: {e}")
+                console.print(f"[red]   ✗ Summary generation failed for article {idx+1}: {e}[/red]")
                 article["summary"] = "Summary generation failed"
+                return False
+        
+        # Execute all summary tasks in parallel
+        tasks = []
+        for idx, article in enumerate(articles):
+            task = asyncio.create_task(process_single_summary(article, idx))
+            tasks.append(task)
+        
+        # Wait for all tasks to complete
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Count successful summaries
+        summary_success_count = sum(1 for result in results if result is True)
+        
         state["articles"] = articles
-        logger.info(f"✅ AI summary generation completed: {summary_success_count}/{len(articles)} articles")
+        console.print(Panel(
+            f"[bold green]✅ AI summary generation completed: {summary_success_count}/{len(articles)} articles[/bold green]",
+            border_style="green"
+        ))
         return state
 
     def final_answer_node(state: NewsAgentState):
@@ -148,75 +193,25 @@ async def main():
     builder.add_conditional_edges("call_model",tools_condition)
     builder.add_edge("tools", "summary_node")
     builder.add_edge("summary_node", "final_answer_node")
+    builder.add_edge("final_answer_node", END)
     graph = builder.compile()
-    logger.info("✅ LangGraph workflow built successfully!")
     
-    # Test 1: What news topics are available?
-    logger.info("")
-    logger.info("-" * 50)
-    logger.info("🔍 QUESTION 1: What news topics are available?")
-    try:
-        # Find get_available_topics tool
-        topics_tool = None
-        for tool in tools:
-            if tool.name == "get_available_topics":
-                topics_tool = tool
-                break
-        
-        if topics_tool:
-            topics_result = await topics_tool.ainvoke({})
-            
-            topics_result = json.loads(topics_result)
-            logger.info(f"Available topics: {', '.join(topics_result)}")
-        else:
-            logger.error("❌ get_available_topics tool not found")
-    except Exception as e:
-        logger.error(f"❌ Error getting topics: {str(e)}")
+    console.print(Panel(
+        "[bold green]✅ LangGraph workflow built successfully![/bold green]",
+        border_style="green"
+    ))
     
-    # Test 2: Get 3 recent news from a specific topic
-    logger.info("")
-    logger.info("-" * 50)
-    logger.info("🔍 QUESTION 2: Get 3 recent technology news articles")
+    question = "Find 16 latest AI-related news articles"
+    console.print(Panel(
+        f"[bold pink1]🔍 QUESTION: {question}[/bold pink1]",
+        border_style="pink1",
+        padding=(1, 2)
+    ))
     
-    try:
-        # Find search_specific_topic_news tool
-        topic_news_tool = None
-        for tool in tools:
-            if tool.name == "search_specific_topic_news":
-                topic_news_tool = tool
-                break
-        
-        if topic_news_tool:
-            topic_result = await topic_news_tool.ainvoke({
-                "topic": "technology",
-                "max_results": 3,
-                "max_length": 2000,
-                "timeout": 10
-            })
-            topic_result = json.loads(topic_result)
-            
-            logger.info(f"Found {len(topic_result)} technology articles:")
-            for i, article in enumerate(topic_result):
-                if isinstance(article, dict):
-                    title = article.get('article_title', 'No title')
-                    url = article.get('article_url', 'No URL')
-                    published = article.get('article_published', 'No date')
-                    logger.info(f"   {i+1}. {title}")
-                    logger.info(f"      📅 {published} | 🔗 {url}")
-                else:
-                    logger.warning(f"   {i+1}. Invalid article format: {type(article)}")
-        else:
-            logger.error("❌ search_specific_topic_news tool not found")
-    except Exception as e:
-        logger.error(f"❌ Error getting topic news: {str(e)}")
-    
-    # Test 3: Get 6 latest AI-related news articles using LangGraph
-    logger.info("")
-    logger.info("-" * 50)
-    logger.info("🔍 QUESTION 3: Get 6 latest AI-related news articles with AI summary")
-    
-    question = "Find 6 latest AI-related news articles"
-    logger.info("Running LangGraph workflow...")
+    console.print(Panel(
+        "[bold yellow]🚀 Running LangGraph workflow...[/bold yellow]",
+        border_style="yellow"
+    ))
     
     try:
         response = await graph.ainvoke({"messages": question})
@@ -225,20 +220,31 @@ async def main():
         messages = response["messages"]
         if messages and hasattr(messages[-1], 'content') and messages[-1].content:
             result_content = messages[-1].content
-            logger.info("")
-            logger.info("-" * 50)
-            logger.info("📋 AI News Summary:")
-            logger.info(result_content)
+            
+            # Create a beautiful result display
+            console.print(Panel(
+                result_content,
+                title="[bold magenta]📋 AI News Summary[/bold magenta]",
+                border_style="magenta",
+                padding=(1, 2)
+            ))
         else:
-            logger.error("❌ No response found")
+            console.print(Panel(
+                "[bold red]❌ No response found[/bold red]",
+                border_style="red"
+            ))
             
     except Exception as e:
-        logger.error(f"❌ Error during search: {str(e)}")
-    logger.info("-" * 50)
+        console.print(Panel(
+            f"[bold red]❌ Error during search: {str(e)}[/bold red]",
+            border_style="red"
+        ))
     
     # Footer
-    logger.info("")
-    logger.info("🎉 All three questions completed successfully!")
+    console.print(Panel(
+        "[dim]🎉 All questions completed successfully![/dim]",
+        border_style="dim"
+    ))
 
 if __name__ == "__main__":
     asyncio.run(main())
