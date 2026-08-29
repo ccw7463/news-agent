@@ -4,6 +4,11 @@ A LangGraph agent over [google-rss-mcp](https://github.com/ccw7463/google-rss-mc
 a Google News MCP server. It searches headlines, reads only the articles worth
 reading, and answers with sources. The LLM is served through OpenRouter.
 
+https://github.com/user-attachments/assets/834439cb-5198-4a40-a8e1-676ee2dbca21
+
+<sub>Recorded before the rework: the run shown fetches every article body up
+front and answers through GPT-4o-mini. The flow below is what runs now.</sub>
+
 ```
 call_model ──▶ tools ──▶ read_articles ──▶ summarize ──▶ answer
               headlines   bounded fetch     per article   fused, cited
