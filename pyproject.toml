@@ -1,41 +1,57 @@
-[tool.poetry]
+[project]
 name = "news-agent"
-version = "0.1.0"
-description = ""
-authors = ["ccw7463 <changwoo7463@gmail.com>"]
+version = "0.2.0"
+description = "LangGraph news agent on top of the google-rss-mcp server"
+authors = [{ name = "ccw7463" }]
 readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["mcp", "model-context-protocol", "langgraph", "news", "agent"]
 
-# 포함할 패키지 지정
-packages = [
-    { include = "log" },
-    { include = "src" },
-    { include = "tests" },
-    { include = "modules", from = "src" }
+dependencies = [
+    # Agent
+    "langgraph>=0.5.2",
+    # OpenRouter speaks the OpenAI wire format, so this client serves every model.
+    "langchain-openai>=0.3.27",
+    # Verified on 0.3.2. 0.1.x returns a tool result as a plain string while
+    # 0.3.x returns a list of content blocks; src/modules/articles.py reads both.
+    "langchain-mcp-adapters>=0.1.9,<0.4.0",
+    "python-dotenv>=1.0.1",
+    "rich>=14.0.0",
+    "pytz>=2025.2",
+
+    # Vendored offline fallback server (src/modules/mcp_servers). The remote
+    # modes need none of these; they are here so MCP_MODE=local works with no
+    # network. Keep in sync with google-rss-mcp's own dependencies.
+    "fastmcp>=2.10.5,<4.0.0",
+    "aiohttp>=3.12.14",
+    "feedparser>=6.0.11",
+    "beautifulsoup4>=4.12.2",
+    "certifi>=2024.2.2",
+    "html2text>=2024.2.26",
 ]
 
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-mcp = "^1.11.0"
-feedparser = "^6.0.11"
-requests = "^2.32.4"
-aiohttp = "^3.12.14"
-fastmcp = "^2.10.5"
-langchain = "^0.3.26"
-langchain-mcp-adapters = "^0.1.9"
-langgraph = "^0.5.2"
-langchain-openai = "^0.3.27"
-rich = "^14.0.0"
-langchain-community = "^0.3.27"
-html2text = "^2025.4.15"
-tqdm = "^4.67.1"
-beautifulsoup4 = "^4.12.2"
-pytz = "^2025.2"
+[tool.uv]
+# An application, not a library: nothing imports `news-agent` from outside, and
+# `main.py` runs from the repo root. Skipping the build keeps `uv sync` to
+# dependencies only, so no build backend is needed.
+package = false
 
-[tool.poetry.group.dev.dependencies]
-black = "^25.1.0"
+[tool.black]
+# Match requires-python; otherwise Black infers a target newer than the
+# interpreter running it and fails its own AST safety check.
+target-version = ["py311"]
 
-[tool.poetry.scripts]
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
-[build-system]
-requires = ["poetry-core"]
+[project.urls]
+Homepage = "https://github.com/ccw7463/news-agent"
+Repository = "https://github.com/ccw7463/news-agent"
